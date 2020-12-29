@@ -1,7 +1,6 @@
 const fs = require("fs");
 const { tokenize } = require("esprima");
 const { minify } = require("terser");
-const { ArgumentParser } = require("argparse");
 
 const {
 	getCharsUntilNextNonSpace,
@@ -9,38 +8,33 @@ const {
 	needsSpaceAfter,
 	getAsciiArtInfo,
 } = require("./helpers");
-const { get } = require("https");
 
 let codeTokens;
 let asciiArt;
 
-async function main() {
-	const parser = new ArgumentParser({
-		description:
-			"converts javascript code to ascii art while mantaining its functionality",
-		add_help: true,
-	});
-
-	parser.add_argument("in", { help: "input path" });
-	parser.add_argument("out", { help: "output path" });
-	parser.add_argument("ascii", { help: "path to file with ascii art" });
-
-	const args = parser.parse_args();
-
-	let code = fs.readFileSync(args.in).toString();
-
+async function art(inFile, outFile, asciiFile) {
+	let code = fs.readFileSync(inFile).toString();
+	let isPossible = true;
 	// minify the code because i.e. long variable names make problems
-	// (they might not fit onto a single line of ascii art)
-	code = await minify(code, { sourceMap: true });
-	code = code.code;
+	code = (await minify(code, { sourceMap: true })).code;
 
 	codeTokens = tokenize(code);
 
-	asciiArt = fs.readFileSync(args.ascii).toString();
+	asciiArt = fs.readFileSync(asciiFile).toString();
+	let asciiArtInfo = getAsciiArtInfo(asciiArt);
 
-	insertToken(0);
+	codeTokens.map((token) => {
+		if (token.value.length > asciiArtInfo.width) {
+			isPossible = false;
+		}
+	});
 
-	fs.writeFile(args.out, outArray.join(""), () => {});
+	if (isPossible) {
+		insertToken(0);
+		fs.writeFile(outFile, outArray.join(""), () => {});
+	} else {
+		console.log("Impossible.");
+	}
 }
 
 let outArray = [];
@@ -66,6 +60,10 @@ function insertToken(i) {
 			);
 			outArray.push(" ".repeat(charsUntilNonSpace));
 			asciiPos += charsUntilNonSpace;
+			insertToken(i);
+		} else if (asciiArt[asciiPos] == "\n") {
+			outArray.push("\n");
+			asciiPos++;
 			insertToken(i);
 		}
 	} else {
@@ -103,4 +101,4 @@ function insertToken(i) {
 	}
 }
 
-main();
+art("index.js", "test.js", "ascii.txt");
